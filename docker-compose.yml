@@ -16,12 +16,15 @@ services:
       - DB_NAME=leadman_dev
       - ACCESS_TOKEN_SECRET=J83NDY5QuFpeurg6bK3112pW1laahA
       - REFRESH_TOKEN_SECRET=qW5nTJR5E9VI07BmBzi8zItDO0EOQ5
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     command: >
       sh -c "
       npm install &&
       npx nodemon --legacy-watch --watch src --ext ts --exec npx ts-node --files src/index.ts"
     depends_on:
       - mongo
+      - redis
 
   mongo:
     image: mongo:6.0
@@ -38,6 +41,20 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5 
+  
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --save 20 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   tests:
       image: node:18-alpine
@@ -52,6 +69,8 @@ services:
         - DB_NAME=leadman_test
         - ACCESS_TOKEN_SECRET=J83NDY5QuFpeurg6bK3112pW1laahA
         - REFRESH_TOKEN_SECRET=qW5nTJR5E9VI07BmBzi8zItDO0EOQ5
+        - REDIS_HOST=redis
+        - REDIS_PORT=6379
       command: >
         sh -c "
         npm install &&
@@ -59,9 +78,11 @@ services:
 
       depends_on:
         - mongo
+        - redis
       profiles:
         - test
 
 
 volumes:
   mongo-data: 
+  redis-data:

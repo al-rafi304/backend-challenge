@@ -1,5 +1,7 @@
 import bcrypt from "bcrypt";
 import { Request, Response } from "express";
+import redis from "../utils/redisClient";
+import jwt from "jsonwebtoken";
 
 import User from "../models/User";
 import { SUCCESS_MESSAGES, ERROR_MESSAGES } from "../constants/messages";
@@ -55,4 +57,31 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const logout = async (req: Request, res: Response): Promise<void> => {};
+export const logout = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const accessToken = req.headers.authorization?.split(" ")[1];
+
+        if (!accessToken) {
+            res.status(401).send(ERROR_MESSAGES.UNAUTHORIZED);
+            return;
+        }
+        const decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET!) as jwt.JwtPayload;
+        const exp = decoded.exp;
+        const now = Math.floor(Date.now() / 1000);
+
+        if (exp && exp > now) {
+            const ttl = exp - now;
+            await redis.set(accessToken, "blacklisted", "EX", ttl);
+        }
+
+        res.clearCookie("refreshToken", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+          });
+
+        res.status(204).json({ message: "Logged out successfully" });
+    } catch (error) {
+        res.status(500).json({ error: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+    }
+};
